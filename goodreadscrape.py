@@ -6,15 +6,19 @@ import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 pd.set_option('display.expand_frame_repr', False)  # display full dataframe width
 
 
 def search_gr(ref_nums):
     """Generate dataframe of Goodreads book information"""
-    driver = webdriver.Chrome('/home/danroth/chromedriver')
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    driver = webdriver.Chrome('/home/danroth/chromedriver', options=chrome_options)
     ref_nums = ref_nums
-    book_nums, titles, authors, followers, dates, og_dates, ratings, genres, bindings, page_num, lang,\
-        num_likes, trivia_qs, quote_likes, rev_likes, num_ratings, num_revs = ([] for i in range(17))
+    book_nums, titles, authors, followers, dates, og_dates, ratings, genres, bindings, page_num, lang, num_likes, \
+        trivia_qs, quote_likes, rev_likes, num_ratings, num_revs, kindle_price, to_read_total, total_added,\
+        amzn_price = ([] for i in range(21))
     print('Searching books')
     for i, book_reference_number in enumerate(ref_nums):
         print(i, book_reference_number)
@@ -92,13 +96,43 @@ def search_gr(ref_nums):
             num_revs.append(int(num_revs_str["content"]))
         except:
             num_revs.append(0)
+        try:
+            to_read_total.append(int(re.findall(r'<span class=\\\"value\\\">(\d*)<\\/span> to-reads', str(soup))[0]))
+        except:
+            to_read_total.append(0)
+        try:
+            total_added.append(int(re.findall(r'<span class=\\\"value\\\">(\d*)<\\/span> people,', str(soup))[0]))
+        except:
+            total_added.append(0)
+        try:
+            price_str = soup.findAll("a", {"class": "glideButton buttonBar"})[0].get_text()
+            kindle_price.append(float(re.search(r'(\d+\.\d+)', price_str).group()))
+        except:
+            kindle_price.append(np.nan)
+        try:
+            amzn_str = soup.find("a", id="buyButton")
+            driver.get("https://www.goodreads.com" + str(amzn_str['href']))
+            amzn_soup = BeautifulSoup(driver.page_source, 'lxml')
+            if amzn_soup.find("span", {"class": "a-size-medium a-color-price header-price"}):
+                amzn_price_str = amzn_soup.find("span", {"class": "a-size-medium a-color-price header-price"}).get_text()
+                amzn_price.append(float(re.search(r'(\d+\.\d+)', amzn_price_str).group()))
+            elif amzn_soup.find("span", {"class": "a-size-medium a-color-price offer-price a-text-normal"}):
+                amzn_price_str = amzn_soup\
+                    .find("span", {"class": "a-size-medium a-color-price offer-price a-text-normal"}).get_text()
+                amzn_price.append(float(re.search(r'(\d+\.\d+)', amzn_price_str).group()))
+            else:
+                amzn_price.append(np.nan)
+        except:
+            amzn_price.append(np.nan)
         # if i + 1 % 150 == 0:
         #     time.sleep(320)
         time.sleep(2)
     keys = ['book_num', 'title', 'author', 'followers', 'pub_date', 'og_pub_date', 'avg_rating', 'genre', 'binding',
-            'pages', 'language', 'perc_like', 'trivia', 'quote_likes', 'rev_likes', 'num_revs', 'num_ratings']
+            'pages', 'language', 'perc_like', 'trivia', 'quote_likes', 'rev_likes', 'num_revs', 'num_ratings',
+            'kindle_price', 'amzn_price', 'total_added', 'total_to_read']
     values = [book_nums, titles, authors, followers, dates, og_dates, ratings, genres, bindings, page_num, lang,
-              num_likes, trivia_qs, quote_likes, rev_likes, num_revs, num_ratings]
+              num_likes, trivia_qs, quote_likes, rev_likes, num_revs, num_ratings, kindle_price, amzn_price,
+              total_added, to_read_total]
     d = dict(zip(keys, values))
     book_df = pd.DataFrame(d)
     driver.close()
@@ -108,7 +142,9 @@ def search_gr(ref_nums):
 
 def gr_stats(ref_nums):
     """Generate dataframe of Goodreads book statistics"""
-    stats_driver = webdriver.Chrome('/home/danroth/chromedriver')  # create driver
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    stats_driver = webdriver.Chrome('/home/danroth/chromedriver', options=chrome_options)
     first_number = ref_nums[0]
     stats_driver.get("https://www.goodreads.com/book/stats?id=" + str(first_number))
 
@@ -141,13 +177,14 @@ def gr_stats(ref_nums):
         except:
             continue
 
-    cols = ['date', 'added', 'ratings', 'reviews', 'to_read', 'book_num']
+    cols = ['date', 'avg_added', 'ratings', 'reviews', 'avg_to_read', 'book_num']
     bookstats_df = pd.DataFrame(l, columns=cols)
     bookstats_df.dropna(inplace=True)
     bookstats_df = bookstats_df.reset_index().drop('index', axis=1)
     bookstats_df.book_num = bookstats_df.book_num.apply(lambda x: int(x))
-    bookstats_df['to_read'] = bookstats_df['to_read'].apply(lambda x: int(x))
-    books_toread = bookstats_df.groupby('book_num').agg({'to_read': 'mean'}).reset_index()
+    bookstats_df['avg_to_read'] = bookstats_df['avg_to_read'].apply(lambda x: int(x))
+    bookstats_df['avg_added'] = bookstats_df['avg_added'].apply(lambda x: int(x))
+    books_toread = bookstats_df.groupby('book_num').agg({'avg_added': 'mean', 'avg_to_read': 'mean'}).reset_index()
     stats_driver.close()
     print('Stats scrape complete')
     return books_toread
@@ -162,8 +199,8 @@ def process_gr(ref_nums):
 
 def main():
     """Essential variables"""
-    num_samples = 2500
-    random.seed(110)
+    num_samples = 10000
+    random.seed(120)
     book_nums = random.sample(range(1, 8630000), num_samples)  # Last book is 8,630,000
 
     """Process and save dataframe"""
