@@ -2,8 +2,6 @@ import time
 import re
 import pickle
 import random
-import threading
-from multiprocessing.pool import ThreadPool
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -24,6 +22,9 @@ def search_gr(ref_nums):
     print('Searching books')
     for i, book_reference_number in enumerate(ref_nums):
         print(i, book_reference_number)
+        if (i + 1) % 5 == 0:
+            time.sleep(30)
+        time.sleep(5)
         driver.get("https://www.goodreads.com/book/show/"+str(book_reference_number))
         soup = BeautifulSoup(driver.page_source, 'lxml')
         book_nums.append(book_reference_number)
@@ -126,9 +127,6 @@ def search_gr(ref_nums):
                 amzn_price.append(np.nan)
         except:
             amzn_price.append(np.nan)
-        # if i + 1 % 150 == 0:
-        #     time.sleep(320)
-        time.sleep(2)
     keys = ['book_num', 'title', 'author', 'followers', 'pub_date', 'og_pub_date', 'avg_rating', 'genre', 'binding',
             'pages', 'language', 'perc_like', 'trivia', 'quote_likes', 'rev_likes', 'num_revs', 'num_ratings',
             'kindle_price', 'amzn_price', 'total_added', 'total_to_read']
@@ -163,9 +161,8 @@ def gr_stats(ref_nums):
     print('Start book stats scrape')
     for i, book_reference_number in enumerate(ref_nums):
         print(i, book_reference_number)
-        if i + 1 % 150 == 0:
-            time.sleep(320)
-        # time.sleep(2)
+        if (i + 1) % 50 == 0:
+            time.sleep(20)
         stats_driver.get("https://www.goodreads.com/book/stats?id=" + str(book_reference_number))
         stats_soup = BeautifulSoup(stats_driver.page_source, 'lxml')
         try:
@@ -206,62 +203,20 @@ def process_gr(ref_nums):
 
 def main():
     """Essential variables"""
-    num_samples = 8
+    num_samples = 2500
     random.seed(120)
-    # book_nums = random.sample(range(1, 8630000), num_samples)  # Last book is 8,630,000
-    book_nums = [2193872, 824748, 2859679, 9332]
+    book_nums = random.sample(range(1, 8630000), num_samples)  # Last book is 8,630,000
 
-    # """Process and save dataframe"""
-    # book_df_raw = process_gr(book_nums)
-    # book_df_raw = book_df_raw.replace('', np.nan)
-    # with open('data/book_data.pkl', 'wb') as savefile:
-    #     pickle.dump(book_df_raw, savefile)
-    #
-    # """Open and manipulate dataframe"""
-    # with open("data/book_data.pkl", 'rb') as openfile:
-    #     book_df = pickle.load(openfile)
-    # print(book_df.describe())
+    """Process and save dataframe"""
+    book_df_raw = process_gr(book_nums)
+    book_df_raw = book_df_raw.replace('', np.nan)
+    with open('data/book_data.pkl', 'wb') as savefile:
+        pickle.dump(book_df_raw, savefile)
 
-    df_compile = []
-    cores = 4
-    pool = ThreadPool(processes=cores)
-    # result_list = pool.map(process_gr, [book_nums])
-
-    # for core in range(1, cores+1):
-    #     globals()["async_result" + str(core)] = \
-    #         pool.apply_async(process_gr,
-    #                          (book_nums[(len(book_nums) // cores) * (core - 1):(len(book_nums) // cores) * core],))
-
-    async_result1 = pool.apply_async(process_gr, (book_nums[:len(book_nums) // cores],))
-    async_result2 = pool.apply_async(process_gr,
-                                     (book_nums[len(book_nums) // cores:(len(book_nums) // cores) * 2],))
-    async_result3 = pool.apply_async(process_gr,
-                                     (book_nums[(len(book_nums) // cores) * 2:(len(book_nums) // cores) * 3],))
-    async_result4 = pool.apply_async(process_gr,
-                                     (book_nums[(len(book_nums) // cores) * 3:(len(book_nums) // cores) * 4],))
-    # async_result5 = pool.apply_async(process_gr,
-    #                                  (book_nums[(len(book_nums) // cores) * 4:(len(book_nums) // cores) * 5],))
-    # async_result6 = pool.apply_async(process_gr,
-    #                                  (book_nums[(len(book_nums) // cores) * 5:(len(book_nums) // cores) * 6],))
-    # async_result7 = pool.apply_async(process_gr,
-    #                                  (book_nums[(len(book_nums) // cores) * 6:(len(book_nums) // cores) * 7],))
-    # async_result8 = pool.apply_async(process_gr,
-    #                                  (book_nums[(len(book_nums) // cores) * 7:(len(book_nums) // cores) * 8],))
-
-    df_compile.append(async_result1.get())
-    df_compile.append(async_result2.get())
-    df_compile.append(async_result3.get())
-    df_compile.append(async_result4.get())
-    # df_compile.append(async_result5.get())
-    # df_compile.append(async_result6.get())
-    # df_compile.append(async_result7.get())
-    # df_compile.append(async_result8.get())
-
-    final_df = pd.concat(df_compile)
-
-    print(final_df)
-
-    # print status code requests.get yields status code
+    """Open and manipulate dataframe"""
+    with open("data/book_data.pkl", 'rb') as openfile:
+        book_df = pickle.load(openfile)
+    print(book_df.describe())
 
 
 if __name__ == "__main__":
