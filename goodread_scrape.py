@@ -151,9 +151,9 @@ def gr_stats(ref_nums):
     login = stats_driver.find_element_by_xpath('//a[contains(@href, "/user/sign_in")]')  # perform login
     login.click()
     username = stats_driver.find_element_by_xpath("//input[@id='user_email']")
-    username.send_keys("d.roth1@unimail.derby.ac.uk")
+    username.send_keys("") # ENTER USERNAME HERE
     password = stats_driver.find_element_by_xpath("//input[@id='user_password']")
-    password.send_keys("metispass6.")
+    password.send_keys("") # ENTER PASSWORD HERE
     sign_in = stats_driver.find_element_by_xpath("//input[@class='gr-button gr-button--large']")
     sign_in.click()
 
